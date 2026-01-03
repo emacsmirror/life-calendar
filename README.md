@@ -74,6 +74,12 @@ Run `M-x customize-group RET life-calendar RET` to customize all options, or set
 ;; Or use a day symbol: 'sunday, 'monday, 'tuesday, etc.
 (setq life-calendar-week-start-day 'monday)
 
+;; Number of columns to display (default: nil).
+;; nil = auto-fit as many columns as the window allows
+;; Or set to a specific number for fixed columns.
+(setq life-calendar-columns nil)   ; auto-fit to window
+(setq life-calendar-columns 2)     ; always show 2 columns
+
 ;; Characters for different week states.
 (setq life-calendar-past-char "●")
 (setq life-calendar-current-char "●")

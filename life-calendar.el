@@ -78,6 +78,14 @@ Otherwise, use a day symbol: `sunday', `monday', etc."
                  (const :tag "Saturday" saturday))
   :group 'life-calendar)
 
+(defcustom life-calendar-columns nil
+  "Number of columns to display in the life calendar.
+If nil, automatically display as many columns as fit in the window.
+If a positive integer, display exactly that many columns."
+  :type '(choice (const :tag "Auto (fit to window)" nil)
+                 (integer :tag "Fixed number of columns"))
+  :group 'life-calendar)
+
 ;;; Faces
 
 (defface life-calendar-past-face
@@ -106,6 +114,32 @@ Otherwise, use a day symbol: `sunday', `monday', etc."
   :group 'life-calendar)
 
 ;;; Internal Functions
+
+;; Layout constants for multi-column display
+(defconst life-calendar--age-label-width 5
+  "Width of the age label (e.g., \"  0: \").")
+
+(defconst life-calendar--weeks-width 53
+  "Maximum number of weeks displayed per year.")
+
+(defconst life-calendar--column-width
+  (+ life-calendar--age-label-width life-calendar--weeks-width)
+  "Total width of a single year column.")
+
+(defconst life-calendar--column-gap 2
+  "Gap between columns in multi-column display.")
+
+(defun life-calendar--calculate-columns (window-width)
+  "Calculate the number of columns that fit in WINDOW-WIDTH.
+If `life-calendar-columns' is set to a positive integer, return that value.
+Otherwise, calculate based on window width."
+  (if (and life-calendar-columns (> life-calendar-columns 0))
+      life-calendar-columns
+    ;; Calculate how many columns fit: first column needs column-width,
+    ;; each additional column needs column-width + gap.
+    (max 1
+         (1+ (/ (- window-width life-calendar--column-width)
+                (+ life-calendar--column-width life-calendar--column-gap))))))
 
 ;; Dates are represented as Emacs time values with hours, minutes, and seconds
 ;; set to zero.  UTC is used to avoid daylight saving time issues with date
@@ -220,10 +254,10 @@ start day for accurate calculation."
                        today)))
     (list years-lived weeks-lived)))
 
-(defun life-calendar--render-week-header ()
-  "Render the week number header line.
+(defun life-calendar--render-single-week-header ()
+  "Render a single week number header (without newline).
 Shows week numbers at positions 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50."
-  (let ((header (make-string 53 ?\s))
+  (let ((header (make-string life-calendar--weeks-width ?\s))
         (week-marks '(1 5 10 15 20 25 30 35 40 45 50)))
     (dolist (week week-marks)
       (let* ((pos (1- week))
@@ -231,53 +265,85 @@ Shows week numbers at positions 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50."
              (num-len (length num-str)))
         (dotimes (i num-len)
           (aset header (+ pos i) (aref num-str i)))))
-    (concat "     "
-            (propertize header 'face 'life-calendar-age-face)
-            "\n")))
+    (concat (make-string life-calendar--age-label-width ?\s)
+            (propertize header 'face 'life-calendar-age-face))))
+
+(defun life-calendar--render-week-header (num-columns)
+  "Render the week number header line for NUM-COLUMNS columns."
+  (let ((single-header (life-calendar--render-single-week-header))
+        (gap (make-string life-calendar--column-gap ?\s))
+        (parts '()))
+    (push single-header parts)
+    (dotimes (col (1- num-columns))
+      (push gap parts)
+      (push single-header parts))
+    (concat (apply #'concat (nreverse parts)) "\n")))
+
+(defun life-calendar--render-year-row (birth-time year years-lived weeks-lived)
+  "Render a single year row for YEAR given BIRTH-TIME.
+YEARS-LIVED and WEEKS-LIVED are used to determine past/current/future status.
+Returns a string of exactly `life-calendar--column-width' characters."
+  (let* ((weeks-in-year (life-calendar--count-weeks-in-year birth-time year))
+         (parts '()))
+    ;; Age label
+    (push (propertize (format "%3d: " year) 'face 'life-calendar-age-face)
+          parts)
+    ;; Weeks
+    (dotimes (week weeks-in-year)
+      (let* ((is-current-year (= year years-lived))
+             (is-past-year (< year years-lived))
+             (is-current-week (and is-current-year (= week weeks-lived)))
+             (is-past-week (or is-past-year
+                               (and is-current-year (< week weeks-lived))))
+             (char (cond
+                    (is-current-week
+                     (propertize life-calendar-current-char
+                                 'face 'life-calendar-current-face))
+                    (is-past-week
+                     (propertize life-calendar-past-char
+                                 'face 'life-calendar-past-face))
+                    (t
+                     (propertize life-calendar-future-char
+                                 'face 'life-calendar-future-face)))))
+        (push char parts)))
+    ;; Pad to full column width if needed (some years have 52 weeks)
+    (let* ((content (apply #'concat (nreverse parts)))
+           (content-len (length content))
+           (padding-needed (- life-calendar--column-width content-len)))
+      (if (> padding-needed 0)
+          (concat content (make-string padding-needed ?\s))
+        content))))
 
 (defun life-calendar--render-calendar (birth-time years)
   "Render the life calendar for BIRTH-TIME with YEARS total years.
 Returns a string containing the rendered calendar."
   (pcase-let* ((`(,years-lived ,weeks-lived)
-               (life-calendar--current-age birth-time))
+                (life-calendar--current-age birth-time))
                (years (max years (1+ years-lived)))
-               (lines '()))
+               (num-columns (life-calendar--calculate-columns (window-width)))
+               (gap (make-string life-calendar--column-gap ?\s))
+               (parts '()))
     ;; Header
     (push (propertize
            (format "Life Calendar - %d years, %d weeks old\n\n"
                    years-lived weeks-lived)
            'face 'life-calendar-header-face)
-          lines)
+          parts)
     ;; Week numbers header
-    (push (life-calendar--render-week-header) lines)
-    ;; Calendar grid
-    (dotimes (year years)
-      (let* ((weeks-in-year (life-calendar--count-weeks-in-year birth-time year))
-             (row-parts '()))
-        ;; Age label
-        (push (propertize (format "%3d: " year) 'face 'life-calendar-age-face)
-              row-parts)
-        ;; Weeks
-        (dotimes (week weeks-in-year)
-          (let* ((is-current-year (= year years-lived))
-                 (is-past-year (< year years-lived))
-                 (is-current-week (and is-current-year (= week weeks-lived)))
-                 (is-past-week (or is-past-year
-                                   (and is-current-year (< week weeks-lived))))
-                 (char (cond
-                        (is-current-week
-                         (propertize life-calendar-current-char
-                                     'face 'life-calendar-current-face))
-                        (is-past-week
-                         (propertize life-calendar-past-char
-                                     'face 'life-calendar-past-face))
-                        (t
-                         (propertize life-calendar-future-char
-                                     'face 'life-calendar-future-face)))))
-            (push char row-parts)))
-        (push (apply #'concat (nreverse row-parts)) lines)
-        (push "\n" lines)))
-    (apply #'concat (nreverse lines))))
+    (push (life-calendar--render-week-header num-columns) parts)
+    ;; Calendar grid - render in groups of num-columns
+    (let ((year 0))
+      (while (< year years)
+        (push (life-calendar--render-year-row
+               birth-time year years-lived weeks-lived)
+              parts)
+        (push (if (or (= year (1- years))
+                      (= (mod year num-columns) (1- num-columns)))
+                  "\n"
+                gap)
+              parts)
+        (setq year (1+ year))))
+    (apply #'concat (nreverse parts))))
 
 (defun life-calendar--ensure-birthday ()
   "Ensure `life-calendar-birthday' is set.
