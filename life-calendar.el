@@ -2,7 +2,7 @@
 
 ;; Copyright (c) 2025 Vadzim Shender
 
-;; Author: Vadzim Shender
+;; Author: Vadzim Shender <https://github.com/vshender>
 ;; URL: https://github.com/vshender/emacs-life-calendar
 ;; Version: 0.1.0
 ;; Keywords: calendar, visualization
@@ -423,17 +423,16 @@ Returns a string of exactly `life-calendar--column-width' characters."
              (is-past-week (or is-past-year
                                (and is-current-year (< week weeks-lived))))
              (chapters (life-calendar--chapters-for-week year week))
-             (has-chapter (not (null chapters)))
              ;; Face: current-week takes priority so today is always highlighted.
              (face (cond
                     (is-current-week 'life-calendar-current-face)
-                    (has-chapter 'life-calendar-chapter-face)
+                    (chapters 'life-calendar-chapter-face)
                     (is-past-week 'life-calendar-past-face)
                     (t 'life-calendar-future-face)))
              ;; Character: chapter takes priority so chapter marker is visible
              ;; even on the current week.
              (char-str (cond
-                        (has-chapter life-calendar-chapter-char)
+                        (chapters life-calendar-chapter-char)
                         (is-current-week life-calendar-current-char)
                         (is-past-week life-calendar-past-char)
                         (t life-calendar-future-char)))
@@ -621,7 +620,7 @@ TARGET controls where point moves after refresh:
   t           -- preserve current position
   DATE-STRING -- move to the week containing this date (YYYY-MM-DD format)"
   (interactive)
-  (when (eq major-mode 'life-calendar-mode)
+  (when (derived-mode-p 'life-calendar-mode)
     (let* ((birthday (life-calendar--ensure-birthday))
            (birth-time (life-calendar--parse-date birthday))
            (age (life-calendar--current-age birth-time))
