@@ -1,5 +1,7 @@
 # Life Calendar for Emacs
 
+[![MELPA](https://melpa.org/packages/life-calendar-badge.svg)](https://melpa.org/#/life-calendar)
+
 Display your life in weeks — a grid visualization showing all weeks of your life, with past weeks, the current week, and future weeks visually distinguished.  Mark significant moments with life chapters to see your journey at a glance.
 
 Inspired by the "Your Life in Weeks" concept from [Wait But Why](https://waitbutwhy.com/2014/05/life-weeks.html).
@@ -7,6 +9,21 @@ Inspired by the "Your Life in Weeks" concept from [Wait But Why](https://waitbut
 ![Life Calendar Screenshot](img/life-calendar.png)
 
 ## Installation
+
+### MELPA
+
+The package is available on [MELPA](https://melpa.org/#/life-calendar).
+
+```
+M-x package-install RET life-calendar RET
+```
+
+Or with `use-package`:
+
+```elisp
+(use-package life-calendar
+  :ensure t)
+```
 
 ### Manual
 
@@ -27,20 +44,13 @@ Emacs 29+ has built-in support for installing packages from Git repositories:
   :ensure t)
 ```
 
-### use-package (with straight.el)
+Note: By default, `:vc` installs the last "release" — the most recent commit that changed the `Version:` header in the elisp file.  To install the latest commit instead, add `:rev :newest`:
 
 ```elisp
 (use-package life-calendar
-  :straight (:host github :repo "vshender/emacs-life-calendar"))
-```
-
-### Doom Emacs
-
-Add to `packages.el`:
-
-```elisp
-(package! life-calendar
-  :recipe (:host github :repo "vshender/emacs-life-calendar"))
+  :vc (:url "https://github.com/vshender/emacs-life-calendar"
+       :rev :newest)
+  :ensure t)
 ```
 
 ## Usage
